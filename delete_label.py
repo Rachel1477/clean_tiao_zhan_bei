@@ -48,7 +48,7 @@ def remove_label_parts(raw_name: str) -> str:
     raw_name: 文件名（不含扩展名）或目录名
     返回处理后的名字（不含扩展名）。
     """
-    pattern = re.compile(r'Label_(\d+)')
+    pattern = re.compile(r'_Label_(\d+)')
     s = raw_name
     # 迭代所有匹配，从左到右处理（因为替换可能改变索引）
     i = 0
@@ -86,7 +86,7 @@ def rename_tracks_second_number(name_no_ext: str) -> str:
     如果不匹配格式，返回原名。
     """
     parts = name_no_ext.split('_')
-    if len(parts) >= 4 and parts[0] == 'PointTracks':
+    if len(parts) >= 4 and parts[0] == 'Tracks':
         # 保留 parts[0], parts[1], 然后拼接 parts[3...]
         new_parts = [parts[0], parts[1]] + parts[3:]
         return '_'.join(new_parts)

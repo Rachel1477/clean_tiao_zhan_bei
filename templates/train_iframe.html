@@ -1,0 +1,16 @@
+<!-- templates/train_iframe.html -->
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>训练界面 (嵌入)</title>
+    <style>
+      html,body { height:100%; margin:0; }
+      iframe { width:100%; height:100vh; border:0; }
+    </style>
+  </head>
+  <body>
+    <!-- 确保 gradio_interface.py 在 7860 端口运行 -->
+    <iframe src="http://127.0.0.1:7860"></iframe>
+  </body>
+</html>

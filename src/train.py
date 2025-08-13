@@ -9,11 +9,13 @@ import os
 import time
 import json
 import math
-
+import sys
+sys.path.append(os.path.dirname(__file__))  
 # 从同级目录导入
 from preprocess import SequentialMultimodalRadarDataset, get_vit_transforms
 from model import MultimodalTransformerWithLSTM
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  #当前文件的路径
 
 # 学习率调度器
 class WarmupCosineAnnealingLR(_LRScheduler):
@@ -110,23 +112,8 @@ def validate_one_epoch(model, dataloader, criterion, device):
     return epoch_loss, epoch_acc.item()
 
 
-def main():
+def main(CONFIG):
     # 配置参数
-    CONFIG = {
-        'data_root_dir': '../',
-        'img_size': (224, 224),
-        'batch_size': 16,  # 时序模型通常需要更小的批次
-        'learning_rate': 1e-4,
-        'num_epochs': 50,
-        'patience': 10,
-        'model_save_dir': './model_save',
-        'log_dir': './logs',
-        'grad_clip': 1.0,
-        'warmup_epochs': 2,
-        'max_seq_len': 30,  # 最大序列长度，根据数据分布设置
-        'mod':'train'
-    }
-
     os.makedirs(CONFIG['model_save_dir'], exist_ok=True)
     os.makedirs(CONFIG['log_dir'], exist_ok=True)
 
@@ -262,4 +249,20 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+
+    CONFIG = {
+        'data_root_dir': os.path.join(BASE_DIR, '../'),
+        'img_size': (224, 224),
+        'batch_size': 16,  # 时序模型通常需要更小的批次
+        'learning_rate': 1e-4,
+        'num_epochs': 50,
+        'patience': 10,
+        'model_save_dir': os.path.join(BASE_DIR, 'model_save'),
+        'log_dir': os.path.join(BASE_DIR, 'logs'),
+        'grad_clip': 1.0,
+        'warmup_epochs': 2,
+        'max_seq_len': 30,  # 最大序列长度，根据数据分布设置
+        'mod':'train'
+    }
+
+    main(CONFIG=CONFIG) 

@@ -7,13 +7,17 @@
   <title>雷达目标在线识别与可视化系统</title>
   <style>
     :root {
-      --primary-color: #00ff00; /* 亮绿色 */
+      --primary-color: #00ff00;
+      /* 亮绿色 */
       --bg-color: #000000;
-      --border-color: #008000; /* 暗绿色 */
+      --border-color: #008000;
+      /* 暗绿色 */
       --text-color: #ffffff;
       --panel-bg-color: rgba(0, 0, 0, 0.6);
-      --highlight-color: #ffff00; /* 黄色 */
-      --error-color: #ff4444; /* 红色 */
+      --highlight-color: #ffff00;
+      /* 黄色 */
+      --error-color: #ff4444;
+      /* 红色 */
     }
 
     * {
@@ -46,7 +50,8 @@
     #radar-canvas {
       width: 100%;
       height: 100%;
-      max-width: 90vh; /* 保持宽高比 */
+      max-width: 90vh;
+      /* 保持宽高比 */
       max-height: 90vh;
       background-color: var(--bg-color);
       border: 1px solid var(--border-color);
@@ -59,11 +64,13 @@
       position: absolute;
       width: 220px;
       height: 160px;
-      border: 2px solid rgba(0,255,0,0.9);
+      border: 2px solid rgba(0, 255, 0, 0.9);
       border-radius: 6px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-      display: none; /* 激活后显示 */
-      pointer-events: none; /* 不阻塞鼠标事件 */
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+      display: none;
+      /* 激活后显示 */
+      pointer-events: none;
+      /* 不阻塞鼠标事件 */
       z-index: 50;
       background: #000;
     }
@@ -78,16 +85,18 @@
       border-left: 2px solid var(--border-color);
     }
 
-    .control-panel {
+    .control-panel,
+    .path-panel {
       display: flex;
       gap: 10px;
       margin-bottom: 10px;
+      align-items: center; /* 垂直居中对齐 */
     }
 
     .control-panel button,
     .control-panel select,
-    .control-panel input[type="range"] {
-      flex: 1;
+    .control-panel input[type="range"],
+    .path-panel button {
       padding: 8px;
       background: var(--bg-color);
       color: var(--primary-color);
@@ -97,12 +106,50 @@
       font-family: inherit;
       font-size: 14px;
     }
+    
+    .path-panel {
+      flex-direction: column;
+      align-items: stretch; /* 让内部元素撑满 */
+    }
+
+    .path-input-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .path-input-group label {
+      font-size: 12px;
+      flex-shrink: 0;
+      width: 110px; /* 对齐 */
+    }
+
+    .path-input-group input[type="text"] {
+      width: 100%;
+      padding: 6px;
+      background: #111;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      font-size: 12px;
+      font-family: inherit;
+    }
+
+
+    .control-panel .flex-item, .path-panel .flex-item {
+      flex: 1;
+    }
 
     .control-panel .small {
       flex: 0 0 110px;
     }
 
-    .control-panel button:hover {
+    .control-panel label {
+        font-size: 14px;
+        color: var(--primary-color);
+        margin-right: -5px; /* 微调间距 */
+    }
+
+    .control-panel button:hover, .path-panel button:hover {
       background-color: var(--border-color);
     }
 
@@ -144,7 +191,8 @@
       flex: 1.2;
       border: 1px solid var(--border-color);
       padding: 10px;
-      overflow-y: auto; /* 改为Y轴滚动 */
+      overflow-y: auto;
+      /* 改为Y轴滚动 */
     }
 
     table {
@@ -175,6 +223,9 @@
 </head>
 
 <body>
+  <a href="/training" target="_blank" style="position:absolute; top:10px; left: 10px; z-index:100; font-size: 1em; padding: 8px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
+     打开模型训练控制台
+</a>
   <!-- 左侧雷达画布容器 -->
   <div class="radar-container">
     <canvas id="radar-canvas"></canvas>
@@ -184,40 +235,42 @@
 
   <!-- 右侧信息容器 -->
   <div class="info-container">
-    <!-- 状态栏 -->
-    <div class="status-bar" id="statusBar">请先扫描数据集（长按雷达画布可启用放大镜）</div>
-
-    <!-- 控制面板 -->
-    <div class="control-panel">
-      <button id="scanButton">扫描数据集</button>
-      <select id="batchSelect" disabled>
-        <option value="">待扫描...</option>
-      </select>
+    <div class="status-bar" id="statusBar">请先设置数据路径并扫描</div>
+    <div class="path-panel">
+        <div class="path-input-group">
+            <label for="trainPathInput">训练数据根目录:</label>
+            <input type="text" id="trainPathInput">
+        </div>
+        <div class="path-input-group">
+            <label for="customerPathInput">测试数据根目录:</label>
+            <input type="text" id="customerPathInput">
+        </div>
+        <button id="updatePathsButton" class="flex-item">更新路径并扫描</button>
     </div>
     <div class="control-panel">
-      <button id="addButton">添加轨迹</button>
-      <button id="clearButton">清除所有雷达轨迹</button>
+        <label for="sourceSelect">数据源:</label>
+        <select id="sourceSelect" class="flex-item" disabled><option value="">待扫描...</option></select>
+        <label for="batchSelect">批号:</label>
+        <select id="batchSelect" class="flex-item" disabled><option value="">请先选数据源</option></select>
     </div>
-
-    <!-- 比例尺滑杆（新） -->
+    <div class="control-panel">
+      <button id="addButton" class="flex-item">添加轨迹到雷达</button>
+      <button id="clearButton" class="flex-item">清除所有雷达轨迹</button>
+    </div>
     <div class="control-panel">
       <div class="small" style="display:flex;flex-direction:column;align-items:center;">
         <label for="scaleRange">雷达比例尺</label>
         <input id="scaleRange" type="range" min="0.25" max="3" step="0.05" value="1">
         <div class="slider-value" id="scaleValue">缩放: 1.00×</div>
       </div>
-      <div style="display:flex;flex-direction:column;justify-content:center;">
+      <div style="display:flex;flex-direction:column;justify-content:center; flex:1; text-align:center;">
         <div style="font-size:12px;color:var(--primary-color);">选中批号即时显示点迹与表格</div>
       </div>
     </div>
-
-    <!-- 原始点迹散点图 -->
     <div class="chart-box">
       <h3>当前选中批号点迹 (距离-俯仰)</h3>
       <canvas id="scatter-canvas"></canvas>
     </div>
-
-    <!-- 航迹数据表格 -->
     <div class="table-box">
       <table id="track-table">
         <thead>
@@ -230,9 +283,7 @@
             <th>速度(m/s)</th>
           </tr>
         </thead>
-        <tbody>
-          <!-- 数据将通过JavaScript动态填充 -->
-        </tbody>
+        <tbody></tbody>
       </table>
     </div>
   </div>
@@ -240,593 +291,204 @@
   <script>
     // --- 全局变量和配置 ---
     const API_BASE = `${window.location.protocol}//${window.location.host}`;
+    function getCSSVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || ''; }
+    let radarTracks = {}; let currentScatterData = []; let currentTableData = []; let radarZoom = 1.0; let cachedBatches = {};
+    const MAG_WIDTH = 220, MAG_HEIGHT = 160, MAG_ZOOM = 2.5, LONG_PRESS_MS = 300;
+    let magnifierActive = false, longPressTimer = null, lastMouse = { x: 5, y: 5 }, rafId = null;
 
-    // 读取 CSS 变量的 helper（安全使用 CSS 变量）
-    function getCSSVar(name) {
-      return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '';
-    }
-
-    let radarTracks = {}; // 存储所有要显示的轨迹数据 { batchId: { data: [], color: '...' } }
-    let currentScatterData = []; // 当前选中的批号的点迹数据
-    let currentTableData = [];
-    let radarZoom = 1.0; // 从滑杆得到的缩放系数
-
-    // 放大镜参数（长按激活，显示放大窗口）
-    const MAG_WIDTH = 220;
-    const MAG_HEIGHT = 160;
-    const MAG_ZOOM = 2.5; // 放大倍数（纯视觉，不改变坐标系）
-    const LONG_PRESS_MS = 300; // 长按持续时间阈值（ms）
-
-    // 放大镜状态
-    let magnifierActive = false;
-    let longPressTimer = null;
-    let lastMouse = { x: 5, y: 5 }; // 相对于页面的坐标
-    let rafId = null;
-
-    // 获取DOM元素
-    const radarCanvas = document.getElementById('radar-canvas');
-    const radarCtx = radarCanvas.getContext('2d');
-    const magnifierCanvas = document.getElementById('magnifier-canvas');
-    const magnifierCtx = magnifierCanvas.getContext('2d');
-    const scatterCanvas = document.getElementById('scatter-canvas');
-    const scatterCtx = scatterCanvas.getContext('2d');
-    const scanButton = document.getElementById('scanButton');
+    // --- DOM元素获取 ---
+    const radarCanvas = document.getElementById('radar-canvas'), radarCtx = radarCanvas.getContext('2d');
+    const magnifierCanvas = document.getElementById('magnifier-canvas'), magnifierCtx = magnifierCanvas.getContext('2d');
+    const scatterCanvas = document.getElementById('scatter-canvas'), scatterCtx = scatterCanvas.getContext('2d');
+    const sourceSelect = document.getElementById('sourceSelect');
     const batchSelect = document.getElementById('batchSelect');
     const addButton = document.getElementById('addButton');
     const clearButton = document.getElementById('clearButton');
     const statusBar = document.getElementById('statusBar');
-    const scaleRange = document.getElementById('scaleRange');
-    const scaleValue = document.getElementById('scaleValue');
+    const scaleRange = document.getElementById('scaleRange'), scaleValue = document.getElementById('scaleValue');
+    const trainPathInput = document.getElementById('trainPathInput');
+    const customerPathInput = document.getElementById('customerPathInput');
+    const updatePathsButton = document.getElementById('updatePathsButton');
 
-    // --- 绘图函数 ---
-    function resizeCanvases() {
-      radarCanvas.width = radarCanvas.offsetWidth;
-      radarCanvas.height = radarCanvas.offsetHeight;
-      scatterCanvas.width = scatterCanvas.offsetWidth;
-      scatterCanvas.height = scatterCanvas.offsetHeight;
+    // --- 绘图与数据更新函数 ---
+    function resizeCanvases() { radarCanvas.width = radarCanvas.offsetWidth; radarCanvas.height = radarCanvas.offsetHeight; scatterCanvas.width = scatterCanvas.offsetWidth; scatterCanvas.height = scatterCanvas.offsetHeight; magnifierCanvas.width = MAG_WIDTH; magnifierCanvas.height = MAG_HEIGHT; }
 
-      // 同步放大镜尺寸
-      magnifierCanvas.width = MAG_WIDTH;
-      magnifierCanvas.height = MAG_HEIGHT;
-    }
-
+    // --- [重点修改] drawRadar 函数 ---
     function drawRadar() {
-      const centerX = radarCanvas.width / 2;
-      const centerY = radarCanvas.height / 2;
-      const radius = Math.min(centerX, centerY) * 0.9;
-
-      radarCtx.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
-      radarCtx.save();
-
-      // 绘制圆环和射线（背景）
-      const rings = 5;
-      radarCtx.lineWidth = 1;
-      for (let i = 1; i <= rings; i++) {
-        radarCtx.beginPath();
-        radarCtx.arc(centerX, centerY, radius * (i / rings), 0, 2 * Math.PI);
-        radarCtx.strokeStyle = 'rgba(0, 255, 0, 0.18)';
-        radarCtx.stroke();
-      }
-      // 射线
-      for (let i = 0; i < 12; i++) {
+        const centerX = radarCanvas.width / 2;
+        const centerY = radarCanvas.height / 2;
+        const radius = Math.min(centerX, centerY) * 0.9;
+        radarCtx.clearRect(0, 0, radarCanvas.width, radarCanvas.height);
         radarCtx.save();
-        radarCtx.translate(centerX, centerY);
-        radarCtx.rotate(i * Math.PI / 6);
-        radarCtx.beginPath();
-        radarCtx.moveTo(0, 0);
-        radarCtx.lineTo(0, -radius);
-        radarCtx.strokeStyle = 'rgba(0,255,0,0.12)';
-        radarCtx.stroke();
+        
+        // 绘制背景
+        const rings = 5;
+        radarCtx.lineWidth = 1;
+        for (let i = 1; i <= rings; i++) {
+            radarCtx.beginPath();
+            radarCtx.arc(centerX, centerY, radius * (i / rings), 0, 2 * Math.PI);
+            radarCtx.strokeStyle = 'rgba(0, 255, 0, 0.18)';
+            radarCtx.stroke();
+        }
+        for (let i = 0; i < 12; i++) {
+            radarCtx.save();
+            radarCtx.translate(centerX, centerY);
+            radarCtx.rotate(i * Math.PI / 6);
+            radarCtx.beginPath();
+            radarCtx.moveTo(0, 0);
+            radarCtx.lineTo(0, -radius);
+            radarCtx.strokeStyle = 'rgba(0,255,0,0.12)';
+            radarCtx.stroke();
+            radarCtx.restore();
+        }
+        
+        // 计算最大距离用于缩放
+        let maxDistance = 1;
+        Object.values(radarTracks).forEach(track => {
+            track.data.forEach(p => { if (p.distance > maxDistance) maxDistance = p.distance; });
+        });
+
+        // 绘制所有轨迹
+        Object.entries(radarTracks).forEach(([compositeKey, track]) => {
+            if (!track.data || track.data.length === 0) return;
+
+            // 绘制轨迹线
+            radarCtx.beginPath();
+            radarCtx.strokeStyle = track.color;
+            radarCtx.lineWidth = 2;
+            track.data.forEach((p, index) => {
+                const angleRad = p.angle * Math.PI / 180;
+                const finalDist = Math.min((p.distance / maxDistance) * radius * radarZoom, radius);
+                const x = centerX + finalDist * Math.sin(angleRad);
+                const y = centerY - finalDist * Math.cos(angleRad);
+                if (index === 0) radarCtx.moveTo(x, y);
+                else radarCtx.lineTo(x, y);
+            });
+            radarCtx.stroke();
+
+            // 绘制点和点的标签
+            track.data.forEach((p) => {
+                const angleRad = p.angle * Math.PI / 180;
+                const finalDist = Math.min((p.distance / maxDistance) * radius * radarZoom, radius);
+                const x = centerX + finalDist * Math.sin(angleRad);
+                const y = centerY - finalDist * Math.cos(angleRad);
+                
+                // 画点
+                radarCtx.beginPath();
+                radarCtx.arc(x, y, 3, 0, 2 * Math.PI);
+                radarCtx.fillStyle = track.color;
+                radarCtx.fill();
+
+                // [新增] 如果点有标签，则绘制它
+                if (p.label) {
+                    radarCtx.font = '10px monospace';
+                    radarCtx.fillStyle = '#FFFF00'; // 用高亮黄色显示点的标签
+                    radarCtx.textAlign = 'center';
+                    radarCtx.textBaseline = 'bottom';
+                    radarCtx.fillText(p.label, x, y - 5);
+                }
+            });
+
+            // 绘制轨迹的总标签
+            const last = track.data[track.data.length - 1];
+            const angleRad = last.angle * Math.PI / 180;
+            const finalDist = Math.min((last.distance / maxDistance) * radius * radarZoom, radius);
+            const lx = centerX + finalDist * Math.sin(angleRad);
+            const ly = centerY - finalDist * Math.cos(angleRad);
+            
+            radarCtx.font = '14px monospace';
+            radarCtx.fillStyle = track.color;
+            radarCtx.textAlign = 'left';
+            radarCtx.textBaseline = 'bottom';
+            const batchId = compositeKey.split('-')[1];
+            // [改动] 使用后端传来的 main_label
+            const displayText = `批 ${batchId} ${track.main_label || ''}`;
+            radarCtx.fillText(displayText, lx + 8, ly - 8);
+        });
         radarCtx.restore();
-      }
-
-      // 计算 maxDistance（用于自动缩放）
-      let maxDistance = 1; // 至少为1，避免除零
-      Object.values(radarTracks).forEach(track => {
-        track.data.forEach(p => {
-          if (p.distance > maxDistance) maxDistance = p.distance;
-        });
-      });
-
-      // 绘制所有轨迹（线 + 每个点）
-      Object.entries(radarTracks).forEach(([batchId, track]) => {
-        if (!track.data || track.data.length === 0) return;
-
-        radarCtx.beginPath();
-        radarCtx.strokeStyle = track.color;
-        radarCtx.lineWidth = 2;
-
-        track.data.forEach((p, index) => {
-          const angleRad = p.angle * Math.PI / 180;
-          // 使用 radarZoom 来放大/缩小
-          const baseScaled = (p.distance / maxDistance) * radius;
-          const scaledDist = baseScaled * radarZoom;
-          // 避免超出雷达边界
-          const finalDist = Math.min(scaledDist, radius);
-          const x = centerX + finalDist * Math.sin(angleRad);
-          const y = centerY - finalDist * Math.cos(angleRad);
-
-          if (index === 0) {
-            radarCtx.moveTo(x, y);
-          } else {
-            radarCtx.lineTo(x, y);
-          }
-        });
-        // 画折线
-        radarCtx.stroke();
-
-        // 画点：在每个点处画小圆
-        track.data.forEach((p, index) => {
-          const angleRad = p.angle * Math.PI / 180;
-          const baseScaled = (p.distance / maxDistance) * radius;
-          const scaledDist = baseScaled * radarZoom;
-          const finalDist = Math.min(scaledDist, radius);
-          const x = centerX + finalDist * Math.sin(angleRad);
-          const y = centerY - finalDist * Math.cos(angleRad);
-          radarCtx.beginPath();
-          radarCtx.arc(x, y, 3, 0, 2 * Math.PI);
-          radarCtx.fillStyle = track.color;
-          radarCtx.fill();
-        });
-
-        // 在轨迹的末尾（或第一点旁）添加批号 label
-        const last = track.data[track.data.length - 1];
-        const angleRad = last.angle * Math.PI / 180;
-        const baseScaled = (last.distance / maxDistance) * radius;
-        const scaledDist = baseScaled * radarZoom;
-        const finalDist = Math.min(scaledDist, radius);
-        const lx = centerX + finalDist * Math.sin(angleRad);
-        const ly = centerY - finalDist * Math.cos(angleRad);
-
-        radarCtx.font = '14px monospace';
-        radarCtx.fillStyle = track.color;
-        radarCtx.textAlign = 'left';
-        radarCtx.textBaseline = 'bottom';
-        radarCtx.fillText(`批 ${batchId}`, lx + 6, ly - 6);
-      });
-
-      radarCtx.restore();
     }
-
-    function drawScatterPlot() {
-      scatterCtx.clearRect(0, 0, scatterCanvas.width, scatterCanvas.height);
-      const padding = 80; // 增大左侧内边距以避免标签被遮挡
-      const plotWidth = scatterCanvas.width - padding * 2;
-      const plotHeight = scatterCanvas.height - padding * 2;
-
-      // 画坐标轴背景网格（直角坐标系）
-      scatterCtx.save();
-      // 背景
-      scatterCtx.fillStyle = getCSSVar('--bg-color') || '#000';
-      scatterCtx.fillRect(0, 0, scatterCanvas.width, scatterCanvas.height);
-
-      // 若无数据，提示
-      if (!currentScatterData || currentScatterData.length === 0) {
-        scatterCtx.fillStyle = getCSSVar('--primary-color') || 'green';
-        scatterCtx.textAlign = 'center';
-        scatterCtx.fillText('请先选择一个批号', scatterCanvas.width / 2, scatterCanvas.height / 2);
-        scatterCtx.restore();
-        return;
-      }
-
-      // 计算范围（为美观，将范围扩展一点）
-      const xs = currentScatterData.map(p => p.x);
-      const ys = currentScatterData.map(p => p.y);
-      const maxX = Math.max(...xs);
-      const minX = Math.min(...xs);
-      const maxY = Math.max(...ys);
-      const minY = Math.min(...ys);
-      const extraX = (maxX - minX) * 0.08 || 1;
-      const extraY = (maxY - minY) * 0.08 || 1;
-      const rangeX = (maxX - minX) + extraX * 2;
-      const rangeY = (maxY - minY) + extraY * 2;
-
-      const scaleX = plotWidth / rangeX;
-      const scaleY = plotHeight / rangeY;
-
-      const originX = padding;
-      const originY = scatterCanvas.height - padding; // 左下为原点
-
-      // 网格与坐标轴
-      scatterCtx.strokeStyle = 'rgba(0,255,0,0.12)';
-      scatterCtx.lineWidth = 1;
-      const gridCount = 6;
-      for (let i = 0; i <= gridCount; i++) {
-        const gx = originX + (i / gridCount) * plotWidth;
-        scatterCtx.beginPath();
-        scatterCtx.moveTo(gx, padding);
-        scatterCtx.lineTo(gx, scatterCanvas.height - padding);
-        scatterCtx.stroke();
-
-        const gy = originY - (i / gridCount) * plotHeight;
-        scatterCtx.beginPath();
-        scatterCtx.moveTo(padding, gy);
-        scatterCtx.lineTo(scatterCanvas.width - padding, gy);
-        scatterCtx.stroke();
-      }
-
-      // 绘制坐标轴箭头与标签
-      scatterCtx.beginPath();
-      scatterCtx.moveTo(padding, padding);
-      scatterCtx.lineTo(padding, scatterCanvas.height - padding);
-      scatterCtx.lineTo(scatterCanvas.width - padding + 6, scatterCanvas.height - padding);
-      scatterCtx.strokeStyle = getCSSVar('--primary-color') || '#0f0';
-      scatterCtx.stroke();
-
-      scatterCtx.font = '12px monospace';
-      scatterCtx.fillStyle = getCSSVar('--primary-color') || '#0f0';
-      scatterCtx.textAlign = 'right';
-      scatterCtx.fillText('俯仰 (°)', padding - 8, padding + 10);
-      scatterCtx.textAlign = 'center';
-      scatterCtx.fillText('距离 (m)', scatterCanvas.width - padding, scatterCanvas.height - padding + 20);
-
-      // 绘制点
-      scatterCtx.fillStyle = getCSSVar('--highlight-color') || '#ff0';
-      currentScatterData.forEach(p => {
-        const x = originX + (p.x - minX + extraX) * scaleX;
-        const y = originY - (p.y - minY + extraY) * scaleY;
-        scatterCtx.beginPath();
-        scatterCtx.arc(x, y, 3, 0, 2 * Math.PI);
-        scatterCtx.fill();
-      });
-
-      // 标注点序号（可选）
-      scatterCtx.fillStyle = getCSSVar('--primary-color') || '#0f0';
-      scatterCtx.font = '10px monospace';
-      currentScatterData.forEach((p, idx) => {
-        const x = originX + (p.x - minX + extraX) * scaleX;
-        const y = originY - (p.y - minY + extraY) * scaleY;
-        // scatterCtx.fillText(String(idx + 1), x + 6, y - 6);
-      });
-
-      scatterCtx.restore();
-    }
-
-    // --- 数据更新函数 ---
-    function formatNumberSafe(v, digits = 2) {
-      const n = parseFloat(v);
-      if (Number.isFinite(n)) {
-        return n.toFixed(digits);
-      }
-      return '-';
-    }
-
-    function updateTable(data) {
-      const tbody = document.querySelector('#track-table tbody');
-      tbody.innerHTML = '';
-      if (!data || data.length === 0) return;
-
-      data.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${row['点时间'] || '-'}</td>
-          <td>${row['批号'] || '-'}</td>
-          <td>${formatNumberSafe(row['滤波距离'])}</td>
-          <td>${formatNumberSafe(row['滤波方位'])}</td>
-          <td>${formatNumberSafe(row['滤波俯仰'])}</td>
-          <td>${formatNumberSafe(row['全速度'])}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function getRandomColor() {
-      const letters = '0123456789ABCDEF';
-      let finalColor = '#';
-      for (let i = 0; i < 6; i++) {
-        finalColor += letters[Math.floor(Math.random() * 16)];
-      }
-      return finalColor;
-    }
-
+    
+    function drawScatterPlot() { scatterCtx.clearRect(0, 0, scatterCanvas.width, scatterCanvas.height); const padding = 80; const plotWidth = scatterCanvas.width - padding * 2; const plotHeight = scatterCanvas.height - padding * 2; scatterCtx.save(); scatterCtx.fillStyle = getCSSVar('--bg-color') || '#000'; scatterCtx.fillRect(0, 0, scatterCanvas.width, scatterCanvas.height); if (!currentScatterData || currentScatterData.length === 0) { scatterCtx.fillStyle = getCSSVar('--primary-color') || 'green'; scatterCtx.textAlign = 'center'; scatterCtx.fillText('请先选择一个批号', scatterCanvas.width / 2, scatterCanvas.height / 2); scatterCtx.restore(); return; } const xs = currentScatterData.map(p => p.x); const ys = currentScatterData.map(p => p.y); const maxX = Math.max(...xs); const minX = Math.min(...xs); const maxY = Math.max(...ys); const minY = Math.min(...ys); const extraX = (maxX - minX) * 0.08 || 1; const extraY = (maxY - minY) * 0.08 || 1; const rangeX = (maxX - minX) + extraX * 2; const rangeY = (maxY - minY) + extraY * 2; const scaleX = plotWidth / rangeX; const scaleY = plotHeight / rangeY; const originX = padding; const originY = scatterCanvas.height - padding; scatterCtx.strokeStyle = 'rgba(0,255,0,0.12)'; scatterCtx.lineWidth = 1; const gridCount = 6; for (let i = 0; i <= gridCount; i++) { const gx = originX + (i / gridCount) * plotWidth; scatterCtx.beginPath(); scatterCtx.moveTo(gx, padding); scatterCtx.lineTo(gx, scatterCanvas.height - padding); scatterCtx.stroke(); const gy = originY - (i / gridCount) * plotHeight; scatterCtx.beginPath(); scatterCtx.moveTo(padding, gy); scatterCtx.lineTo(scatterCanvas.width - padding, gy); scatterCtx.stroke(); } scatterCtx.beginPath(); scatterCtx.moveTo(padding, padding); scatterCtx.lineTo(padding, scatterCanvas.height - padding); scatterCtx.lineTo(scatterCanvas.width - padding + 6, scatterCanvas.height - padding); scatterCtx.strokeStyle = getCSSVar('--primary-color') || '#0f0'; scatterCtx.stroke(); scatterCtx.font = '12px monospace'; scatterCtx.fillStyle = getCSSVar('--primary-color') || '#0f0'; scatterCtx.textAlign = 'right'; scatterCtx.fillText('俯仰 (°)', padding - 8, padding + 10); scatterCtx.textAlign = 'center'; scatterCtx.fillText('距离 (m)', scatterCanvas.width - padding, scatterCanvas.height - padding + 20); scatterCtx.fillStyle = getCSSVar('--highlight-color') || '#ff0'; currentScatterData.forEach(p => { const x = originX + (p.x - minX + extraX) * scaleX; const y = originY - (p.y - minY + extraY) * scaleY; scatterCtx.beginPath(); scatterCtx.arc(x, y, 3, 0, 2 * Math.PI); scatterCtx.fill(); }); scatterCtx.restore(); }
+    function formatNumberSafe(v, digits = 2) { const n = parseFloat(v); if (Number.isFinite(n)) { return n.toFixed(digits); } return '-'; }
+    function updateTable(data) { const tbody = document.querySelector('#track-table tbody'); tbody.innerHTML = ''; if (!data || data.length === 0) return; data.forEach(row => { const tr = document.createElement('tr'); tr.innerHTML = `<td>${row['点时间'] || '-'}</td><td>${row['批号'] || '-'}</td><td>${formatNumberSafe(row['滤波距离'])}</td><td>${formatNumberSafe(row['滤波方位'])}</td><td>${formatNumberSafe(row['滤波俯仰'])}</td><td>${formatNumberSafe(row['全速度'])}</td>`; tbody.appendChild(tr); }); }
+    function getRandomColor() { const letters = '0123456789ABCDEF'; let finalColor = '#'; for (let i = 0; i < 6; i++) { finalColor += letters[Math.floor(Math.random() * 16)]; } return finalColor; }
+    
     // --- API 调用函数 ---
-    async function handleScanDataset() {
-      statusBar.textContent = "正在扫描数据集...";
-      statusBar.style.color = getCSSVar('--primary-color') || 'green';
-      try {
-        const res = await fetch(`${API_BASE}/scan_dataset`);
-        const data = await res.json().catch(() => null);
-        if (res.ok) {
-          statusBar.textContent = (data && data.message) ? data.message : '扫描完成';
-          statusBar.style.color = (data && data.status === 'error') ? (getCSSVar('--error-color') || 'red') : (getCSSVar('--primary-color') || 'green');
-          await loadBatchList(); // 扫描成功后加载批号列表
-        } else {
-          const errMsg = (data && (data.message || data.error)) ? (data.message || data.error) : `扫描失败（状态 ${res.status}）`;
-          throw new Error(errMsg);
-        }
-      } catch (e) {
-        statusBar.textContent = `扫描失败: ${e.message}`;
-        statusBar.style.color = getCSSVar('--error-color') || 'red';
-      }
-    }
-
-    async function loadBatchList() {
-      try {
-        const res = await fetch(`${API_BASE}/batches`);
-        if (!res.ok) throw new Error('获取批次列表失败');
-
-        const data = await res.json();
-        batchSelect.innerHTML = '<option value="">选择批次</option>';
-        if (data.batches && data.batches.length > 0) {
-          data.batches.forEach(batch => {
-            const opt = document.createElement('option');
-            opt.value = batch;
-            opt.textContent = `航迹批号 ${batch}`;
-            batchSelect.appendChild(opt);
-          });
-          batchSelect.disabled = false;
-        } else {
-          batchSelect.innerHTML = '<option value="">无可用批次</option>';
-          batchSelect.disabled = true;
-        }
-      } catch (e) {
-        console.error('加载批次列表失败:', e);
-        batchSelect.innerHTML = `<option value="">加载失败</option>`;
-        batchSelect.disabled = true;
-      }
-    }
-
-    // 当用户选择批号时，立即展示该批号的点迹和表格（但不自动把轨迹添加到雷达）
-    async function handleSelectBatch() {
-      const batchId = batchSelect.value;
-      if (!batchId) {
-        currentScatterData = [];
-        currentTableData = [];
-        updateTable([]);
-        drawScatterPlot();
-        return;
-      }
-
-      statusBar.textContent = `正在加载批号 ${batchId} 的点迹与表格...`;
-      try {
-        const [tableResRaw, pointCoordsRaw] = await Promise.all([
-          fetch(`${API_BASE}/track_data_table`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch: batchId })
-          }),
-          fetch(`${API_BASE}/point_coordinates`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch: batchId })
-          })
-        ]);
-
-        const tableRes = await tableResRaw.json().catch(() => ({ error: '解析表格数据失败' }));
-        const pointCoordsRes = await pointCoordsRaw.json().catch(() => ({ error: '解析点迹坐标失败' }));
-
-        if (tableRes.error || pointCoordsRes.error) {
-          throw new Error(tableRes.error || pointCoordsRes.error);
-        }
-
-        currentTableData = tableRes.data || [];
-        updateTable(currentTableData);
-        currentScatterData = (pointCoordsRes.scatter_data || []).map(p => ({ x: parseFloat(p.x) || 0, y: parseFloat(p.y) || 0 }));
-
-        statusBar.textContent = `已加载批号 ${batchId} 的点迹与表格（尚未添加到雷达）。`;
-        statusBar.style.color = getCSSVar('--primary-color') || 'green';
-      } catch (e) {
-        statusBar.textContent = `加载批号 ${batchId} 失败: ${e.message}`;
-        statusBar.style.color = getCSSVar('--error-color') || 'red';
-      } finally {
-        drawScatterPlot();
-      }
-    }
-
-    // 添加轨迹到雷达显示（真正把轨迹加入 radarTracks）
+    async function loadAndDisplayPaths() { try { const res = await fetch(`${API_BASE}/api/paths`); if (!res.ok) throw new Error('获取路径配置失败'); const paths = await res.json(); trainPathInput.value = paths.TRAIN_ROOT_DIR; customerPathInput.value = paths.CUSTOMER_ROOT_DIR; } catch (e) { statusBar.textContent = `错误: ${e.message}`; statusBar.style.color = getCSSVar('--error-color') || 'red'; } }
+    async function handleUpdatePaths() { statusBar.textContent = "正在更新路径并重新扫描..."; statusBar.style.color = getCSSVar('--primary-color') || 'green'; const newTrainPath = trainPathInput.value; const newCustomerPath = customerPathInput.value; try { const res = await fetch(`${API_BASE}/api/paths`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ 'TRAIN_ROOT_DIR': newTrainPath, 'CUSTOMER_ROOT_DIR': newCustomerPath }) }); const data = await res.json(); if (!res.ok) throw new Error(data.error || '更新失败'); await handleScanDataset(); statusBar.textContent = data.message || "路径更新并扫描成功！"; } catch (e) { statusBar.textContent = `路径更新失败: ${e.message}`; statusBar.style.color = getCSSVar('--error-color') || 'red'; } }
+    async function handleScanDataset() { statusBar.textContent = "正在扫描数据集..."; statusBar.style.color = getCSSVar('--primary-color') || 'green'; try { const res = await fetch(`${API_BASE}/scan_dataset`); const data = await res.json().catch(() => null); if (res.ok) { statusBar.textContent = (data && data.message) ? data.message : '扫描完成'; statusBar.style.color = (data && data.status === 'error') ? (getCSSVar('--error-color') || 'red') : (getCSSVar('--primary-color') || 'green'); await loadBatchList(); } else { const errMsg = (data && (data.message || data.error)) ? (data.message || data.error) : `扫描失败（状态 ${res.status}）`; throw new Error(errMsg); } } catch (e) { statusBar.textContent = `扫描失败: ${e.message}`; statusBar.style.color = getCSSVar('--error-color') || 'red'; } }
+    async function loadBatchList() { try { const res = await fetch(`${API_BASE}/batches`); if (!res.ok) throw new Error('获取批次列表失败'); const data = await res.json(); sourceSelect.innerHTML = '<option value="">选择数据源...</option>'; batchSelect.innerHTML = '<option value="">先选数据源...</option>'; sourceSelect.disabled = true; batchSelect.disabled = true; if (data.sources && Object.keys(data.sources).length > 0) { cachedBatches = data.sources; const sourceNames = { 'train': '训练数据 (TRAIN)', 'customer': '测试数据 (CUSTOMER)' }; Object.keys(cachedBatches).forEach(sourceKey => { if (cachedBatches[sourceKey] && cachedBatches[sourceKey].length > 0) { const opt = document.createElement('option'); opt.value = sourceKey; opt.textContent = sourceNames[sourceKey] || sourceKey; sourceSelect.appendChild(opt); } }); if (sourceSelect.options.length > 1) { sourceSelect.disabled = false; } else { sourceSelect.innerHTML = '<option value="">无可用数据源</option>'; } } else { sourceSelect.innerHTML = '<option value="">无可用数据源</option>'; } } catch (e) { console.error('加载批次列表失败:', e); sourceSelect.innerHTML = `<option value="">加载失败</option>`; } }
+    function populateBatchSelect() { const selectedSource = sourceSelect.value; batchSelect.innerHTML = ''; batchSelect.disabled = true; if (selectedSource && cachedBatches[selectedSource]) { const batches = cachedBatches[selectedSource]; batchSelect.innerHTML = '<option value="">选择一个批号...</option>'; if (batches.length > 0) { batches.forEach(batchInfo => { const opt = document.createElement('option'); opt.value = batchInfo.id; opt.textContent = `航迹批号 ${batchInfo.id}`; batchSelect.appendChild(opt); }); batchSelect.disabled = false; } else { batchSelect.innerHTML = '<option value="">此源无批号</option>'; } } else { batchSelect.innerHTML = '<option value="">先选数据源...</option>'; } currentScatterData = []; currentTableData = []; updateTable([]); drawScatterPlot(); }
+    async function handleSelectBatch() { const source = sourceSelect.value; const batchId = batchSelect.value; if (!source || !batchId) { currentScatterData = []; currentTableData = []; updateTable([]); drawScatterPlot(); return; } statusBar.textContent = `正在加载批号 ${batchId} (源: ${source})...`; try { const body = JSON.stringify({ batch: batchId, source: source }); const [tableResRaw, pointCoordsRaw] = await Promise.all([ fetch(`${API_BASE}/track_data_table`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }), fetch(`${API_BASE}/point_coordinates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }) ]); const tableRes = await tableResRaw.json().catch(() => ({ error: '解析表格数据失败' })); const pointCoordsRes = await pointCoordsRaw.json().catch(() => ({ error: '解析点迹坐标失败' })); if (tableRes.error || pointCoordsRes.error) throw new Error(tableRes.error || pointCoordsRes.error); currentTableData = tableRes.data || []; updateTable(currentTableData); currentScatterData = (pointCoordsRes.scatter_data || []).map(p => ({ x: parseFloat(p.x) || 0, y: parseFloat(p.y) || 0 })); statusBar.textContent = `已加载批号 ${batchId} 的数据。`; statusBar.style.color = getCSSVar('--primary-color') || 'green'; } catch (e) { statusBar.textContent = `加载批号 ${batchId} (源: ${source}) 失败: ${e.message}`; statusBar.style.color = getCSSVar('--error-color') || 'red'; } finally { drawScatterPlot(); } }
+    
+    // --- [重点修改] handleAddTrack 函数 ---
     async function handleAddTrack() {
+      const source = sourceSelect.value;
       const batchId = batchSelect.value;
-      if (!batchId) {
-        alert('请先选择一个批号！');
+      if (!source || !batchId) {
+        alert('请先选择一个数据源和批号！');
         return;
       }
-      if (radarTracks[batchId]) {
-        alert(`航迹 ${batchId} 已添加！`);
+      const compositeValue = `${source}-${batchId}`;
+      if (radarTracks[compositeValue]) {
+        alert(`航迹 ${source} ${batchId} 已添加！`);
         return;
       }
 
-      statusBar.textContent = `正在加载批号 ${batchId} 的轨迹数据...`;
+      statusBar.textContent = `正在加载批号 ${batchId} (源: ${source}) 的轨迹数据...`;
       try {
-        const [tableResRaw, trackCoordsRaw, pointCoordsRaw] = await Promise.all([
-          fetch(`${API_BASE}/track_data_table`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch: batchId })
-          }),
-          fetch(`${API_BASE}/track_coordinates`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch: batchId })
-          }),
-          fetch(`${API_BASE}/point_coordinates`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batch: batchId })
-          })
-        ]);
-
-        const tableRes = await tableResRaw.json().catch(() => ({ error: '解析表格数据失败' }));
+        const body = JSON.stringify({ batch: batchId, source: source });
+        // 只需请求 track_coordinates，因为它现在包含了所有需要的信息
+        const trackCoordsRaw = await fetch(`${API_BASE}/track_coordinates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
         const trackCoordsRes = await trackCoordsRaw.json().catch(() => ({ error: '解析航迹坐标失败' }));
-        const pointCoordsRes = await pointCoordsRaw.json().catch(() => ({ error: '解析点迹坐标失败' }));
+        if (trackCoordsRes.error) throw new Error(trackCoordsRes.error);
 
-        if (tableRes.error || trackCoordsRes.error || pointCoordsRes.error) {
-          throw new Error(tableRes.error || trackCoordsRes.error || pointCoordsRes.error);
-        }
-
-        // 更新轨迹数据并加入雷达显示
-        radarTracks[batchId] = {
-          data: (trackCoordsRes.coordinates || []).map(p => ({ distance: parseFloat(p.distance) || 0, angle: parseFloat(p.angle) || 0 })),
-          color: getRandomColor()
+        // 使用后端返回的数据填充雷达轨迹对象
+        radarTracks[compositeValue] = {
+          data: trackCoordsRes.coordinates || [], // data现在可能包含{distance, angle, label}
+          color: getRandomColor(),
+          main_label: trackCoordsRes.main_label || '' // 存储主标签
         };
 
-        // 仍然更新右侧当前显示（table 和 scatter），因为用户可能希望同时看到
-        currentTableData = tableRes.data || [];
-        updateTable(currentTableData);
-        currentScatterData = (pointCoordsRes.scatter_data || []).map(p => ({ x: parseFloat(p.x) || 0, y: parseFloat(p.y) || 0 }));
-
-        statusBar.textContent = `已成功添加航迹 ${batchId} 到雷达显示。`;
+        // 触发一次数据加载，以更新右侧的表格和散点图
+        handleSelectBatch(); 
+        
+        statusBar.textContent = `已成功添加航迹 ${batchId} (源: ${source}) 到雷达显示。`;
         statusBar.style.color = getCSSVar('--primary-color') || 'green';
       } catch (e) {
-        statusBar.textContent = `加载批号 ${batchId} 失败: ${e.message}`;
+        statusBar.textContent = `加载批号 ${batchId} (源: ${source}) 失败: ${e.message}`;
         statusBar.style.color = getCSSVar('--error-color') || 'red';
       } finally {
         drawRadar();
-        drawScatterPlot();
       }
     }
 
-    function handleClearTracks() {
-      // 仅清除雷达上添加的轨迹，但保留当前选中批号的数据（表格与散点）
-      radarTracks = {};
-      drawRadar();
-      statusBar.textContent = "已清除所有雷达轨迹。";
-      statusBar.style.color = getCSSVar('--primary-color') || 'green';
-    }
-
-    // --- 放大镜（长按显示跟随小窗）逻辑 ---
-    function activateMagnifier() {
-      magnifierActive = true;
-      magnifierCanvas.style.display = 'block';
-      // 立即开始绘制并保持更新
-      function loop() {
-        if (!magnifierActive) return;
-        drawMagnifierFrame();
-        rafId = requestAnimationFrame(loop);
-      }
-      if (!rafId) loop();
-      statusBar.textContent = '放大镜已激活（按住左键移动以跟随，松开结束）。';
-    }
-
-    function deactivateMagnifier() {
-      magnifierActive = false;
-      magnifierCanvas.style.display = 'none';
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = null;
-      }
-      statusBar.textContent = '放大镜已关闭。';
-    }
-
-    function drawMagnifierFrame() {
-      // 以页面坐标为基础，计算相对于 radarCanvas 的坐标
-      const rect = radarCanvas.getBoundingClientRect();
-      const mx = lastMouse.x - rect.left;
-      const my = lastMouse.y - rect.top;
-
-      // 源区域大小（在 radarCanvas 上）
-      const sw = MAG_WIDTH / MAG_ZOOM;
-      const sh = MAG_HEIGHT / MAG_ZOOM;
-      let sx = mx - sw / 2;
-      let sy = my - sh / 2;
-
-      // 限制在画布范围内
-      sx = Math.max(0, Math.min(sx, radarCanvas.width - sw));
-      sy = Math.max(0, Math.min(sy, radarCanvas.height - sh));
-
-      // 把 radarCanvas 的这部分放大绘制到 magnifierCanvas
-      try {
-        magnifierCtx.clearRect(0, 0, MAG_WIDTH, MAG_HEIGHT);
-        magnifierCtx.imageSmoothingEnabled = true;
-        magnifierCtx.drawImage(radarCanvas, sx, sy, sw, sh, 0, 0, MAG_WIDTH, MAG_HEIGHT);
-
-        // 绘制中心十字线，方便对齐
-        magnifierCtx.strokeStyle = 'rgba(0,255,0,0.9)';
-        magnifierCtx.lineWidth = 1;
-        magnifierCtx.beginPath();
-        magnifierCtx.moveTo(MAG_WIDTH / 2, 0);
-        magnifierCtx.lineTo(MAG_WIDTH / 2, MAG_HEIGHT);
-        magnifierCtx.moveTo(0, MAG_HEIGHT / 2);
-        magnifierCtx.lineTo(MAG_WIDTH, MAG_HEIGHT / 2);
-        magnifierCtx.stroke();
-
-        // 画一个半透明背景边框
-        magnifierCtx.strokeStyle = 'rgba(0,255,0,0.95)';
-        magnifierCtx.lineWidth = 2;
-        magnifierCtx.strokeRect(0.5, 0.5, MAG_WIDTH - 1, MAG_HEIGHT - 1);
-      } catch (e) {
-        // 有时在快速 resize 或移出时 drawImage 可能抛异常，忽略它
-        console.warn('magnifier draw error', e);
-      }
-
-      // 将 magnifierCanvas 放置在鼠标右下方（但不超过 radar 容器边界）
-      const offset = 16;
-      const containerRect = document.querySelector('.radar-container').getBoundingClientRect();
-      let left = lastMouse.x + offset;
-      let top = lastMouse.y + offset;
-
-      // 如果右侧超出容器，放到左侧
-      if (left + MAG_WIDTH > containerRect.right) {
-        left = lastMouse.x - offset - MAG_WIDTH;
-      }
-      // 如果下方超出容器，放到上方
-      if (top + MAG_HEIGHT > containerRect.bottom) {
-        top = lastMouse.y - offset - MAG_HEIGHT;
-      }
-
-      // 转为相对于 radar-container 的定位
-      magnifierCanvas.style.left = (left - containerRect.left) + 'px';
-      magnifierCanvas.style.top = (top - containerRect.top) + 'px';
-    }
-
-    // 事件处理：长按激活放大镜
-    function onRadarMouseDown(e) {
-      // 仅响应左键
-      if (e.button !== 0) return;
-      lastMouse = { x: e.clientX, y: e.clientY };
-      // 启动长按计时器
-      longPressTimer = setTimeout(() => {
-        activateMagnifier();
-      }, LONG_PRESS_MS);
-    }
-
-    function onRadarMouseMove(e) {
-      lastMouse = { x: e.clientX, y: e.clientY };
-      // 若已激活放大镜，立即绘制（通过 RAF loop）
-      // 若未激活但按下并移动，也保持计时器（不取消）
-    }
-
-    function onRadarMouseUpOrLeave(e) {
-      // 清除长按计时器
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      // 若放大镜激活则关闭
-      if (magnifierActive) {
-        deactivateMagnifier();
-      }
-    }
-
+    function handleClearTracks() { radarTracks = {}; drawRadar(); statusBar.textContent = "已清除所有雷达轨迹。"; statusBar.style.color = getCSSVar('--primary-color') || 'green'; }
+    function activateMagnifier() { magnifierActive = true; magnifierCanvas.style.display = 'block'; function loop() { if (!magnifierActive) return; drawMagnifierFrame(); rafId = requestAnimationFrame(loop); } if (!rafId) loop(); statusBar.textContent = '放大镜已激活（按住左键移动以跟随，松开结束）。'; }
+    function deactivateMagnifier() { magnifierActive = false; magnifierCanvas.style.display = 'none'; if (rafId) { cancelAnimationFrame(rafId); rafId = null; } statusBar.textContent = '放大镜已关闭。'; }
+    function drawMagnifierFrame() { const rect = radarCanvas.getBoundingClientRect(); const mx = lastMouse.x - rect.left; const my = lastMouse.y - rect.top; const sw = MAG_WIDTH / MAG_ZOOM; const sh = MAG_HEIGHT / MAG_ZOOM; let sx = mx - sw / 2; let sy = my - sh / 2; sx = Math.max(0, Math.min(sx, radarCanvas.width - sw)); sy = Math.max(0, Math.min(sy, radarCanvas.height - sh)); try { magnifierCtx.clearRect(0, 0, MAG_WIDTH, MAG_HEIGHT); magnifierCtx.imageSmoothingEnabled = true; magnifierCtx.drawImage(radarCanvas, sx, sy, sw, sh, 0, 0, MAG_WIDTH, MAG_HEIGHT); magnifierCtx.strokeStyle = 'rgba(0,255,0,0.9)'; magnifierCtx.lineWidth = 1; magnifierCtx.beginPath(); magnifierCtx.moveTo(MAG_WIDTH / 2, 0); magnifierCtx.lineTo(MAG_WIDTH / 2, MAG_HEIGHT); magnifierCtx.moveTo(0, MAG_HEIGHT / 2); magnifierCtx.lineTo(MAG_WIDTH, MAG_HEIGHT / 2); magnifierCtx.stroke(); magnifierCtx.strokeStyle = 'rgba(0,255,0,0.95)'; magnifierCtx.lineWidth = 2; magnifierCtx.strokeRect(0.5, 0.5, MAG_WIDTH - 1, MAG_HEIGHT - 1); } catch (e) { console.warn('magnifier draw error', e); } const offset = 16; const containerRect = document.querySelector('.radar-container').getBoundingClientRect(); let left = lastMouse.x + offset; let top = lastMouse.y + offset; if (left + MAG_WIDTH > containerRect.right) { left = lastMouse.x - offset - MAG_WIDTH; } if (top + MAG_HEIGHT > containerRect.bottom) { top = lastMouse.y - offset - MAG_HEIGHT; } magnifierCanvas.style.left = (left - containerRect.left) + 'px'; magnifierCanvas.style.top = (top - containerRect.top) + 'px'; }
+    function onRadarMouseDown(e) { if (e.button !== 0) return; lastMouse = { x: e.clientX, y: e.clientY }; longPressTimer = setTimeout(() => { activateMagnifier(); }, LONG_PRESS_MS); }
+    function onRadarMouseMove(e) { lastMouse = { x: e.clientX, y: e.clientY }; }
+    function onRadarMouseUpOrLeave(e) { if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; } if (magnifierActive) { deactivateMagnifier(); } }
+    
     // --- 事件绑定与初始化 ---
     function init() {
-      resizeCanvases();
-      drawRadar();
-      drawScatterPlot();
-
-      // 绑定事件
-      scanButton.addEventListener('click', handleScanDataset);
+      resizeCanvases(); drawRadar(); drawScatterPlot();
+      loadAndDisplayPaths();
+      updatePathsButton.addEventListener('click', handleUpdatePaths);
       addButton.addEventListener('click', handleAddTrack);
       clearButton.addEventListener('click', handleClearTracks);
-      window.addEventListener('resize', () => {
-        resizeCanvases();
-        drawRadar();
-        drawScatterPlot();
-      });
-
-      // 批号选择立即显示（不需要按添加按钮）
+      window.addEventListener('resize', () => { resizeCanvases(); drawRadar(); drawScatterPlot(); });
+      sourceSelect.addEventListener('change', populateBatchSelect);
       batchSelect.addEventListener('change', handleSelectBatch);
-
-      // 放大镜相关事件（长按激活并跟随）
       radarCanvas.addEventListener('mousedown', onRadarMouseDown);
       window.addEventListener('mousemove', onRadarMouseMove);
       window.addEventListener('mouseup', onRadarMouseUpOrLeave);
       radarCanvas.addEventListener('mouseleave', onRadarMouseUpOrLeave);
-
-      // 滑杆输入（更新基础缩放）
-      scaleRange.addEventListener('input', () => {
-        const val = parseFloat(scaleRange.value) || 1.0;
-        radarZoom = val;
-        scaleValue.textContent = `缩放: ${val.toFixed(2)}×`;
-        drawRadar();
-      });
-
-      // 如果用户在页面加载后想要自动扫描，可以解除注释下面这一行
-      // handleScanDataset();
+      scaleRange.addEventListener('input', () => { const val = parseFloat(scaleRange.value) || 1.0; radarZoom = val; scaleValue.textContent = `缩放: ${val.toFixed(2)}×`; drawRadar(); });
+      handleScanDataset();
     }
-
-    // 页面加载完成后初始化
     window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
-
 </html>

@@ -8,7 +8,7 @@ from PIL import Image
 from tqdm import tqdm
 import re
 
-
+err_list=[]
 class SequentialMultimodalRadarDataset(Dataset):
     """
     时序多模态雷达数据集类，为Transformer+LSTM模型准备数据。
@@ -22,7 +22,7 @@ class SequentialMultimodalRadarDataset(Dataset):
         self.data_split = data_split
         self.transform = transform
         self.max_seq_len = max_seq_len  # 最大序列长度
-        self.npy_dir = os.path.join(data_root_dir, 'dataset', data_split)
+        self.npy_dir = os.path.join(data_root_dir, 'DRmap', data_split)
         self.point_track_dir = os.path.join(data_root_dir, '点迹')
         self.track_dir = os.path.join(data_root_dir, '航迹')
 
@@ -38,6 +38,7 @@ class SequentialMultimodalRadarDataset(Dataset):
         self.label_map = {}
         self.tabular_data_cache = {}
 
+        print(f'npy_dir:{self.npy_dir}, point_track_dir{self.point_track_dir}, track_dir:{self.track_dir}')
         if not all(os.path.isdir(d) for d in [self.npy_dir, self.point_track_dir, self.track_dir]):
             raise FileNotFoundError("一个或多个数据目录未找到。请检查路径。")
 
@@ -89,8 +90,13 @@ class SequentialMultimodalRadarDataset(Dataset):
             return None, None
 
     def _load_tracks(self):
-        """按航迹加载时序数据"""
-        file_pattern = re.compile(r'(\d+)_Label_(\d+)_Point_(\d+)\.npy')
+        """
+        按航迹加载时序数据。
+        修改后的逻辑：以Tracks.txt文件为基准进行迭代，确保时序完整性。
+        如果某个时间步缺少对应的.npy文件，则为其创建一个零矩阵作为占位符。
+        """
+        # 正则表达式用于从.npy文件名中解析信息，现在用于构建预期的文件名
+        file_pattern_base = "{track_id}_Label_{label}_Point_{point_index}.npy"
 
         # 遍历所有航迹文件夹
         for track_folder in tqdm(os.listdir(self.npy_dir), desc=f"扫描 {self.data_split} 航迹"):
@@ -101,21 +107,25 @@ class SequentialMultimodalRadarDataset(Dataset):
             # 解析航迹ID和标签
             track_folder_parts = track_folder.split('_')
             if len(track_folder_parts) < 3:
+                print(f"发现不合规的航迹文件夹名: {track_folder}")
                 continue
             track_id, label = track_folder_parts[0], track_folder_parts[2]
 
-            # 查找对应的点迹和航迹数据文件
+            # 查找并确认唯一的表格数据文件
             track_txt_files = [f for f in os.listdir(self.track_dir) if f.startswith(f'Tracks_{track_id}_{label}_')]
             if not track_txt_files:
+                print(f"警告: 航迹 {track_id} 找不到对应的 'Tracks_{track_id}_{label}_*.txt' 文件，已跳过。")
                 continue
-            track_len = track_txt_files[0].split('_')[-1].replace('.txt', '')
+            
+            # 从文件名中解析航迹长度
+            track_len_str = track_txt_files[0].split('_')[-1].replace('.txt', '')
 
             # 加载表格数据
-            point_df, track_df = self._load_tabular_data(track_id, label, track_len)
+            point_df, track_df = self._load_tabular_data(track_id, label, track_len_str)
             if point_df is None or track_df is None:
                 continue
 
-            # 数据清洗
+            # 数据清洗（与之前相同）
             for col in self.point_cols + ['时间间隔']:
                 if col in point_df.columns:
                     point_df[col] = pd.to_numeric(point_df[col], errors='coerce')
@@ -128,54 +138,58 @@ class SequentialMultimodalRadarDataset(Dataset):
             track_df.fillna(track_df.mean(numeric_only=True), inplace=True)
             track_df.fillna(0, inplace=True)
 
-            # 收集该航迹的所有时间步数据
+            # --- 核心逻辑修改 ---
+            # 之前的逻辑是查找所有存在的.npy文件，现在改为以txt文件的行数为准进行迭代
             track_steps = []
-            npy_files_with_id = []
-            for npy_file in os.listdir(current_track_path):
-                match = file_pattern.match(npy_file)
-                if match:
-                    point_id = int(match.group(3))
-                    npy_files_with_id.append((point_id, npy_file))
+            num_steps_in_df = min(len(point_df), len(track_df)) # 以较短的数据帧为准，防止索引越界
 
-            # 按点ID排序，确保时间顺序
-            npy_files_with_id.sort()
+            for i in range(num_steps_in_df):
+                # 限制最大序列长度
+                if i >= self.max_seq_len:
+                    break
+                try:
+                    # 1. 提取表格特征（这部分总会执行）
+                    point_features = point_df.iloc[i][self.point_cols].values.astype(np.float32)
+                    time_interval = point_df.iloc[i]['时间间隔'] if '时间间隔' in point_df.columns else 0
+                    time_interval = np.array([time_interval], dtype=np.float32)
+                    track_features = track_df.iloc[i][self.track_cols].values.astype(np.float32)
 
-            # 提取每个时间步的数据
-            for i, (point_id, npy_file) in enumerate(npy_files_with_id):
-                if i < len(point_df) and i < len(track_df) and i < self.max_seq_len:
-                    try:
-                        # 提取点迹特征
-                        point_features = point_df.iloc[i][self.point_cols].values.astype(np.float32)
-                        # 提取时间间隔
-                        time_interval = point_df.iloc[i]['时间间隔'] if '时间间隔' in point_df.columns else 0
-                        time_interval = np.array([time_interval], dtype=np.float32)
-                        # 提取航迹特征
-                        track_features = track_df.iloc[i][self.track_cols].values.astype(np.float32)
-
-                        # 检查是否有NaN值
-                        if np.isnan(point_features).any() or np.isnan(track_features).any():
-                            print(f"警告: 发现NaN，在文件 {npy_file}, 行 {i}。将跳过。")
-                            continue
-
-                        # 组合特征(包含时间间隔)
-                        tabular_features = np.concatenate([point_features, track_features, time_interval])
-
-                        # 加载RD图
-                        rd_map_path = os.path.join(current_track_path, npy_file)
-                        rd_map_raw = np.load(rd_map_path)
-
-                        track_steps.append({
-                            'rd_map_path': rd_map_path,
-                            'rd_map_raw': rd_map_raw,
-                            'tabular_features': tabular_features,
-                        })
-
-                    except Exception as e:
-                        print(f"提取特征时出错 {npy_file}: {e}")
+                    if np.isnan(point_features).any() or np.isnan(track_features).any():
+                        print(f"警告: 在航迹 {track_id} 的第 {i} 行发现NaN值，已跳过该时间步。")
                         continue
+                    
+                    tabular_features = np.concatenate([point_features, track_features, time_interval])
 
-                 # 只保留有足够时间步的航迹
-            if len(track_steps) >= 2:  # 至少需要5个时间步
+                    # 2. 构建预期的.npy文件名并尝试加载
+                    expected_npy_file = file_pattern_base.format(track_id=track_id, label=label, point_index=i+1)
+                    rd_map_path = os.path.join(current_track_path, expected_npy_file)
+
+                    try:
+                        rd_map_raw = np.load(rd_map_path)
+                    except FileNotFoundError:
+                        # 如果文件未找到，创建零矩阵作为占位符
+                        if expected_npy_file not in err_list:
+                            err_list.append(expected_npy_file)
+                            print(f"警告: RD图文件未找到: {expected_npy_file}。将使用零矩阵代替。")
+                        # 尺寸可以是一个小值，因为后续的transform会将其resize
+                        rd_map_raw = np.zeros((32, 32), dtype=np.uint8)
+
+                    # 3. 将该时间步的数据（无论RD图是否存在）添加到序列中
+                    track_steps.append({
+                        'rd_map_path': rd_map_path,
+                        'rd_map_raw': rd_map_raw,
+                        'tabular_features': tabular_features,
+                    })
+
+                except IndexError:
+                    print(f"警告: 在航迹 {track_id} 的第 {i} 行发生索引错误，提前结束该航迹处理。")
+                    break # 如果发生索引错误，则停止处理此航迹的后续步骤
+                except Exception as e:
+                    print(f"提取特征时发生未知错误，在航迹 {track_id} 的第 {i} 行: {e}。已跳过该时间步。")
+                    continue
+
+            # 只保留有足够时间步的航迹（与之前相同）
+            if len(track_steps) >= 2:
                 self.tracks.append({
                     'track_id': track_id,
                     'label': label,
