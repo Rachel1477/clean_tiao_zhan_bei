@@ -11,11 +11,10 @@ import json
 import math
 import sys
 sys.path.append(os.path.dirname(__file__))  
-# 从同级目录导入
 from preprocess import SequentialMultimodalRadarDataset, get_vit_transforms
 from model import MultimodalTransformerWithLSTM
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  #当前文件的路径
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  
 
 # 学习率调度器
 class WarmupCosineAnnealingLR(_LRScheduler):
@@ -37,7 +36,7 @@ class WarmupCosineAnnealingLR(_LRScheduler):
 
 
 def train_one_epoch(model, dataloader, criterion, optimizer, scheduler, device, epoch, writer, grad_clip_value):
-    """训练一个轮次"""
+
     model.train()
     running_loss = 0.0
     correct_predictions = 0
@@ -45,29 +44,26 @@ def train_one_epoch(model, dataloader, criterion, optimizer, scheduler, device, 
 
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1} Training", leave=False)
     for i, batch in enumerate(progress_bar):
-        # 加载批次数据
-        rd_map_sequences = batch['rd_map_sequence'].to(device)  # (B, T, C, H, W)
-        tabular_sequences = batch['tabular_sequence'].to(device)  # (B, T, F)
-        lengths = batch['length'].to(device)  # (B,)
+        rd_map_sequences = batch['rd_map_sequence'].to(device)  
+        tabular_sequences = batch['tabular_sequence'].to(device)  
+        lengths = batch['length'].to(device)  
         labels = batch['label'].to(device)
 
-        # 前向传播
+
         outputs = model(rd_map_sequences, tabular_sequences, lengths)
         loss = criterion(outputs, labels)
 
-        # 检查loss是否为nan
+
         if torch.isnan(loss):
             print(f"检测到 NaN loss 在 step {i}。停止训练。")
             return float('nan'), float('nan')
 
-        # 反向传播和优化
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_value)
         optimizer.step()
         scheduler.step()
 
-        # 记录指标
         running_loss += loss.item() * rd_map_sequences.size(0)
         _, preds = torch.max(outputs, 1)
         correct_predictions += torch.sum(preds == labels.data)
@@ -85,7 +81,6 @@ def train_one_epoch(model, dataloader, criterion, optimizer, scheduler, device, 
 
 
 def validate_one_epoch(model, dataloader, criterion, device):
-    """验证一个轮次"""
     model.eval()
     running_loss = 0.0
     correct_predictions = 0
@@ -113,7 +108,7 @@ def validate_one_epoch(model, dataloader, criterion, device):
 
 
 def main(CONFIG):
-    # 配置参数
+
     os.makedirs(CONFIG['model_save_dir'], exist_ok=True)
     os.makedirs(CONFIG['log_dir'], exist_ok=True)
 
@@ -121,11 +116,11 @@ def main(CONFIG):
     writer = SummaryWriter(log_dir=CONFIG['log_dir'])
     print(f"使用设备: {device}")
 
-    # 准备数据集和DataLoader
+
     print("准备数据集中...")
     data_transforms = get_vit_transforms(img_size=CONFIG['img_size'])
     scaler_save_path = os.path.join(CONFIG['model_save_dir'], 'tabular_scaler.npz')
-    # 训练集
+
     train_dataset = SequentialMultimodalRadarDataset(
         data_root_dir=CONFIG['data_root_dir'],
         data_split='train',
@@ -136,7 +131,7 @@ def main(CONFIG):
 
     )
 
-    # 验证集（使用训练集的scaler）
+
     val_dataset = SequentialMultimodalRadarDataset(
         data_root_dir=CONFIG['data_root_dir'],
         data_split='val',
@@ -146,31 +141,31 @@ def main(CONFIG):
         mod=CONFIG['mod'],
 
     )
-    # DataLoader
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=CONFIG['batch_size'],
         shuffle=True,
-        num_workers=4,
+        num_workers=0,         #windows缺少fork子进程模式，为了兼容，这里都调成0了。如果你用的是linux系统，可以调大这个参数，会极大加快训练速度
         pin_memory=True
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=CONFIG['batch_size'],
         shuffle=False,
-        num_workers=4,
+        num_workers=0,
         pin_memory=True
     )
 
-    # 保存标签映射
+
     label_map_path = os.path.join(CONFIG['model_save_dir'], 'label_map.json')
     with open(label_map_path, 'w') as f:
         json.dump(train_dataset.label_map, f)
     print(f"标签映射已保存到: {label_map_path}")
 
-    # 初始化模型、损失函数和优化器
+ 
     num_classes = len(train_dataset.label_map)
-    # 计算表格特征数量（点迹+航迹+时间间隔）
+
     num_tabular_features = len(train_dataset.point_cols) + len(train_dataset.track_cols)
 
     model = MultimodalTransformerWithLSTM(
@@ -191,12 +186,11 @@ def main(CONFIG):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=CONFIG['learning_rate'], weight_decay=0.01)
 
-    # 初始化学习率调度器
+
     total_steps = len(train_loader) * CONFIG['num_epochs']
     warmup_steps = len(train_loader) * CONFIG['warmup_epochs']
     scheduler = WarmupCosineAnnealingLR(optimizer, warmup_steps=warmup_steps, total_steps=total_steps)
 
-    # 训练循环
     best_val_acc = 0.0
     epochs_no_improve = 0
     print("\n--- 开始训练 (Transformer + LSTM) ---")
@@ -209,7 +203,6 @@ def main(CONFIG):
             device, epoch, writer, CONFIG['grad_clip']
         )
 
-        # 检查训练是否因nan loss中断
         if math.isnan(train_loss):
             print("训练因 NaN loss 终止。")
             break
@@ -225,13 +218,12 @@ def main(CONFIG):
               f"LR: {optimizer.param_groups[0]['lr']:.1e} | "
               f"Duration: {epoch_duration:.2f}s")
 
-        # 记录到TensorBoard
+        # 记录TensorBoard
         writer.add_scalar('Loss/train_epoch', train_loss, epoch)
         writer.add_scalar('Accuracy/train_epoch', train_acc, epoch)
         writer.add_scalar('Loss/val_epoch', val_loss, epoch)
         writer.add_scalar('Accuracy/val_epoch', val_acc, epoch)
 
-        # 保存最佳模型
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             epochs_no_improve = 0
@@ -253,7 +245,7 @@ if __name__ == '__main__':
     CONFIG = {
         'data_root_dir': os.path.join(BASE_DIR, '../'),
         'img_size': (224, 224),
-        'batch_size': 16,  # 时序模型通常需要更小的批次
+        'batch_size': 16, 
         'learning_rate': 1e-4,
         'num_epochs': 50,
         'patience': 10,

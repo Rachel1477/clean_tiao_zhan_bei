@@ -5,29 +5,23 @@ from flask import Flask, jsonify, request, render_template, send_from_directory
 from flask_cors import CORS
 import re
 
-# --- 全局配置 ---
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# 将路径配置放入一个字典中，以便动态修改
+
 APP_CONFIG = {
     'TRAIN_ROOT_DIR': BASE_DIR,
-    'CUSTOMER_ROOT_DIR': os.path.join(BASE_DIR, '测试数据') # 默认的自定义路径
+    'CUSTOMER_ROOT_DIR': os.path.join(BASE_DIR, '测试数据') 
 }
 
-# Flask 应用初始化
 app = Flask(__name__)
-# 允许所有来源的跨域请求，方便前端开发
-CORS(app) 
 
-# [改动] 缓存现在存储对象列表，以便包含标签信息
-# e.g., {'train': [{'id': '101', 'label': '3'}], 'customer': [{'id': '201'}]}
+CORS(app) 
 available_batches = {}
 
 
 def scan_and_cache_batches():
-    """
-    [改动] 扫描时，为训练数据提取并缓存标签。
-    """
+
     global available_batches
     available_batches = {} 
 
@@ -43,13 +37,10 @@ def scan_and_cache_batches():
         if not os.path.isdir(track_dir):
             print(f"警告: 在数据源 '{source_name}' 中未找到航迹目录: {track_dir}")
             continue
-        
-        # 用于存储已找到的批号，避免重复添加
+    
         found_ids = set()
 
-        # 模式1：带标签的训练数据 Tracks_批号_标签_长度.txt
         pattern1 = re.compile(r'Tracks_(\d+)_(\d+)_(\d+)\.txt')
-        # 模式2：不带标签的测试数据 Tracks_批号_长度.txt
         pattern2 = re.compile(r'Tracks_(\d+)_(\d+)\.txt')
 
         for filename in os.listdir(track_dir):
@@ -64,11 +55,9 @@ def scan_and_cache_batches():
             elif source_name == 'customer' and match2:
                 batch_id, _ = match2.groups()
                 if batch_id not in found_ids:
-                    # 客户数据不从文件名读取标签
                     available_batches[source_name].append({'id': batch_id})
                     found_ids.add(batch_id)
-        
-        # 按数字大小排序
+
         available_batches[source_name].sort(key=lambda x: int(x['id']))
     
     total_found = len(available_batches.get('train', [])) + len(available_batches.get('customer', []))
@@ -81,15 +70,13 @@ def find_file_by_batch(directory, prefix, batch_id):
     """
     if not os.path.isdir(directory):
         return None
-    
-    # 匹配 "prefix_batchid" 开头，".txt" 结尾的任何文件
+
     pattern = re.compile(rf'{prefix}_{batch_id}(?:_\d+)*\.txt')
     for filename in os.listdir(directory):
         if pattern.match(filename):
             return os.path.join(directory, filename)
     return None
 
-# API 端点 (大部分无改动)
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -160,7 +147,6 @@ def get_track_data_table_endpoint():
         return jsonify({'data': df.to_dict('records')})
     except Exception as e: return jsonify({'error': f'读取或解析航迹文件时出错: {e}'}), 500
 
-# --- [重点修改] ---
 @app.route('/track_coordinates', methods=['POST'])
 def get_track_coordinates_endpoint():
     """
@@ -181,19 +167,18 @@ def get_track_coordinates_endpoint():
         coords_df = df[['滤波距离', '滤波方位']].rename(columns={'滤波距离': 'distance', '滤波方位': 'angle'})
 
         if source == 'train':
-            # 从缓存中查找标签
             batch_info = next((item for item in available_batches.get('train', []) if item['id'] == batch_id), None)
             if batch_info and 'label' in batch_info:
                 main_label = f": label {batch_info['label']}"
         
         elif source == 'customer':
             if '识别结果' in df.columns:
-                # 情况B: 已预测
+
                 main_label = "(测试数据)"
-                # 为每个点附加标签
+
                 coords_df['label'] = df['识别结果'].astype(str)
             else:
-                # 情况A: 待预测
+
                 main_label = ": 待预测 (测试数据)"
 
         records = coords_df.to_dict('records')
