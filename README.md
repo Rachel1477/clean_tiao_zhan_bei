@@ -163,6 +163,33 @@ python app.py
 3.关于是否作弊的解释：
 因为项目中使用了LSTM，涉及到跨时间处理数据，但是本项目中的LSTM是单向的，不会出现用后面的数据预测前面的点的情况。**并且为了避免误解，apply.py中牺牲了推理速度，使用逐点推理。虽然数据集一次性都给出来了，但是我们依旧模拟每次只开放一个点的情况。每次只给模型开放当前点和之前周期的数据，后面的数据模型根本看不到，因此100%不会出现作弊嫌疑**
 
-4.关于开发过程：
+4.参数的调节
+
+对于batch_size,learning_rate,pic_size,num_epochs等常用参数，都是可以自己调整的。你可以在train.py,valid.py,apply.py的主函数部分，有一个名为CONFIG的字典，里面保存了所有要用到的参数，你可以直接修改这个字典进行调整。
+它类似下面的结构
+```python
+if __name__ == '__main__':
+
+    CONFIG = {
+        'data_root_dir': os.path.join(BASE_DIR, '../'),
+        'img_size': (224, 224),
+        'batch_size': 16, 
+        'learning_rate': 1e-4,
+        'num_epochs': 50,
+        'patience': 10,
+        'model_save_dir': os.path.join(BASE_DIR, 'model_save'),
+        'log_dir': os.path.join(BASE_DIR, 'logs'),
+        'grad_clip': 1.0,
+        'warmup_epochs': 2,
+        'max_seq_len': 30,  # 最大序列长度，根据数据分布设置
+        'mod':'train'
+    }
+
+    main(CONFIG=CONFIG) 
+```
+
+当然，你也可以在gradio界面上调整，两者是完全等效的。
+
+5.关于开发过程：
 在最终方案确定前，我们团队还尝试过多种不同的方案，本方案为综合考虑最好的一版。你可以访问https://github.com/Rachel1477/tiao_zhan_bei 来查看其他结果（仓库会在8.15提交赛题之后开放为public）
 
