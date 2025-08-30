@@ -117,7 +117,7 @@ python scoring.py
 |── 航迹                       
 |── 原始回波  
 ```
-随后打开matlab运行**get_DR_fortrain.m**，它会从.dat中提取出无label格式DR map并用npy格式保存
+随后打开matlab运行**get_DR_fortest.m**，它会从.dat中提取出无label格式DR map并用npy格式保存
 
 接着运行
 ```
